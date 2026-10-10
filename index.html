@@ -3,6 +3,7 @@
 <title>PKVoie</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
 /* Layout: one-column field tool, big trackside PK plate on top, two tabs (Ma position / Aller à un PK), canvas mini-map below */
 :root{
@@ -40,8 +41,8 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .notice{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--accent);padding:10px 12px;font-size:14px;display:flex;gap:10px;align-items:flex-start}
 .notice p{margin:0;flex:1}
 .notice button{background:none;border:0;color:var(--muted);font:inherit;font-weight:600;cursor:pointer;padding:0 4px}
-.tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px}
-.tabs button{font-family:var(--display);font-size:20px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:10px 6px;border:0;border-radius:9px;background:transparent;color:var(--muted);cursor:pointer}
+.tabs{display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px}
+.tabs button{font-family:var(--display);font-size:17px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:10px 6px;border:0;border-radius:9px;background:transparent;color:var(--muted);cursor:pointer}
 .tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-fg)}
 /* the trackside kilometre plate */
 .plate{background:var(--plate);color:var(--plate-fg);border:4px solid var(--plate-edge);border-radius:6px;padding:10px 14px 12px;text-align:center;box-shadow:0 2px 0 rgba(0,0,0,.15)}
@@ -88,6 +89,26 @@ input[type=text]{width:100%;box-sizing:border-box;font:inherit;font-size:20px;pa
 .foot a{color:inherit}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:999px;font-weight:600;font-size:14px}
 @media (prefers-reduced-motion:no-preference){.pk{transition:color .2s}}
+/* explorer */
+.exmap{position:relative;height:360px;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#2b3138}
+#exMap{position:absolute;inset:0}
+.exbase{position:absolute;left:8px;top:8px;z-index:500;display:flex;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:3px;gap:3px}
+.exbase button,.seg button{font-family:var(--display);font-weight:700;font-size:15px;padding:6px 10px;border:0;border-radius:7px;background:transparent;color:var(--muted);cursor:pointer}
+.exbase button[aria-pressed="true"],.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
+.recenter{position:absolute;right:8px;bottom:22px;z-index:500;font-family:var(--display);font-weight:700;font-size:15px;padding:8px 12px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer}
+.exarrow{width:30px;height:30px;display:grid;place-items:center}
+.exarrow div{width:0;height:0;border-left:11px solid transparent;border-right:11px solid transparent;border-bottom:26px solid #ff7a24;filter:drop-shadow(0 0 2px #000)}
+.kmlbl{background:#fff;color:#101418;border:2px solid #101418;border-radius:3px;font-family:var(--display);font-weight:800;font-size:13px;line-height:1;padding:2px 4px;white-space:nowrap;text-align:center}
+.slide{width:100%;accent-color:var(--accent);height:32px;margin:0}
+.slidelbl{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.steps{display:grid;grid-template-columns:1fr 1fr 1.3fr 1fr 1fr;gap:6px}
+.steps button{font-family:var(--display);font-weight:700;font-size:17px;padding:12px 2px;border-radius:10px;border:2px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer}
+.steps .play{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-size:20px}
+.seg{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:3px;gap:3px}
+.seg button{flex:1}
+.optrow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.optrow label{margin-bottom:4px}
+.leaflet-container{font-family:var(--body)}
 </style>
 
 <div class="wrap">
@@ -99,8 +120,9 @@ input[type=text]{width:100%;box-sizing:border-box;font:inherit;font-size:20px;pa
   <div class="notice" id="notice"><p><b>Outil d'aide au repérage.</b> Ne remplace pas les procédures de sécurité en vigueur. Toujours confirmer avec les documents officiels.</p><button id="noticeX" aria-label="Fermer">OK</button></div>
 
   <div class="tabs" role="tablist">
-    <button role="tab" id="tabPos" aria-selected="true">Ma position</button>
-    <button role="tab" id="tabGo" aria-selected="false">Aller à un PK</button>
+    <button role="tab" id="tabPos" aria-selected="true">Position</button>
+    <button role="tab" id="tabGo" aria-selected="false">Aller à PK</button>
+    <button role="tab" id="tabEx" aria-selected="false">Explorer</button>
   </div>
 
   <!-- MA POSITION -->
@@ -181,6 +203,47 @@ input[type=text]{width:100%;box-sizing:border-box;font:inherit;font-size:20px;pa
     </div>
   </section>
 
+  <!-- EXPLORER -->
+  <section id="vEx" class="card" hidden>
+    <div id="exPick">
+      <label for="exQ">Ligne à explorer (numéro ou gare)</label>
+      <input type="text" id="exQ" placeholder="ex. 830000 ou Marseille" autocomplete="off">
+      <div class="res" id="exRes" hidden></div>
+    </div>
+    <div class="chosen" id="exChosen" hidden><div><b id="exCode"></b><span id="exName"></span></div><button id="exChX">Changer</button></div>
+    <div class="plate" aria-live="off">
+      <div class="lbl">PK exploré</div>
+      <div class="pk" id="exPk">—</div>
+      <div class="ligne" id="exLigne">Choisissez une ligne</div>
+      <div class="sub" id="exEntre"></div>
+    </div>
+    <div class="exmap">
+      <div id="exMap" aria-label="Vue satellite de la ligne"></div>
+      <div class="exbase"><button data-b="sat" aria-pressed="true">Satellite</button><button data-b="plan" aria-pressed="false">Plan</button></div>
+      <button class="recenter" id="exRecenter" hidden>Recentrer</button>
+    </div>
+    <div>
+      <input type="range" class="slide" id="exSlide" min="0" max="1" step="0.1" value="0" aria-label="Position le long de la ligne">
+      <div class="slidelbl"><span id="exMin"></span><span id="exMax"></span></div>
+    </div>
+    <div class="steps">
+      <button data-s="-10" aria-label="Reculer d'un kilomètre">−1 km</button>
+      <button data-s="-1" aria-label="Reculer de 100 mètres">−100</button>
+      <button class="play" id="exPlay" aria-label="Lecture">▶</button>
+      <button data-s="1" aria-label="Avancer de 100 mètres">+100</button>
+      <button data-s="10" aria-label="Avancer d'un kilomètre">+1 km</button>
+    </div>
+    <div class="optrow">
+      <div><label>Vitesse</label><div class="seg" id="exSpeed"><button data-v="30" aria-pressed="false">30</button><button data-v="100" aria-pressed="true">100</button><button data-v="300" aria-pressed="false">300</button></div></div>
+      <div><label>Sens des PK</label><div class="seg" id="exDir"><button data-v="1" aria-pressed="true">Croissant</button><button data-v="-1" aria-pressed="false">Décr.</button></div></div>
+    </div>
+    <div class="row">
+      <button class="btn alt" id="exFromMe">Partir de ma position</button>
+      <a class="btn alt" id="exGmaps" target="_blank" rel="noopener">Google Maps ici</a>
+    </div>
+    <p class="near">Touchez la carte pour sauter à un point de la voie. Vitesses en km/h, déplacement simulé en temps réel. Photos aériennes IGN : ce sont des prises de vue datées, pas des images en direct.</p>
+  </section>
+
   <p class="foot">Données : points kilométriques du réseau ferré national, open data SNCF Réseau (licence ODbL), reconstitués par <a href="https://carto.graou.info" target="_blank" rel="noopener">carto.graou.info</a>. Données de 2019, précision de l'ordre de la dizaine de mètres, des écarts sont possibles.</p>
 </div>
 <div class="toast" id="toast" hidden></div>
@@ -245,8 +308,8 @@ function toast(t){const e=$('toast');e.textContent=t;e.hidden=false;clearTimeout
 async function copy(text){try{await navigator.clipboard.writeText(text);toast('Copié')}catch(e){const r=document.createRange();const el=$('toast');el.textContent=text;el.hidden=false;r.selectNodeContents(el);const s=getSelection();s.removeAllRanges();s.addRange(r);setTimeout(()=>el.hidden=true,4000)}}
 
 // ---------- tabs ----------
-function setTab(t){st.tab=t;$('tabPos').setAttribute('aria-selected',t==='pos');$('tabGo').setAttribute('aria-selected',t==='go');$('vPos').hidden=t!=='pos';$('vGo').hidden=t!=='go';if(t==='pos')draw()}
-$('tabPos').onclick=()=>setTab('pos');$('tabGo').onclick=()=>setTab('go');
+function setTab(t){st.tab=t;$('tabPos').setAttribute('aria-selected',t==='pos');$('tabGo').setAttribute('aria-selected',t==='go');$('tabEx').setAttribute('aria-selected',t==='ex');$('vPos').hidden=t!=='pos';$('vGo').hidden=t!=='go';$('vEx').hidden=t!=='ex';if(t==='pos')draw();if(t==='ex')openEx();else exStop()}
+$('tabPos').onclick=()=>setTab('pos');$('tabGo').onclick=()=>setTab('go');$('tabEx').onclick=()=>setTab('ex');
 
 // ---------- position ----------
 function setPos(lat,lon,acc,src){st.pos=[lat,lon];st.acc=acc;st.src=src;const m=locate(lat,lon);st.match=m[0]||null;st.others=m.slice(1,4).filter(x=>x.d<150);if(!st.center||src==='gps')st.center=[lat,lon];render();draw()}
@@ -347,6 +410,87 @@ function go(){const err=$('goErr');err.hidden=true;$('goOut').hidden=true;
   st.target=p;$('goOut').hidden=false}
 $('goBtn').onclick=go;$('pkIn').addEventListener('keydown',e=>{if(e.key==='Enter')go()});
 $('copyGo').onclick=()=>copy($('goCoords').textContent);
+
+// ---------- explorer ----------
+const ex={code:null,L:null,hm:null,play:false,speed:100,dir:1,map:null,LF:null,lines:null,marker:null,kms:null,kmKey:null,base:'sat',layers:null,raf:0,t:0,follow:true,dragging:false,loading:null};
+function lineObj(c){const i=codes.indexOf(c);return i<0?null:LINES[i]}
+function segIdx(Ln,hm){let lo=0,hi=Ln.n-1;if(hm<=Ln.pk[0])return 0;if(hm>=Ln.pk[hi])return hi-1;while(hi-lo>1){const m=(lo+hi)>>1;if(Ln.pk[m]<=hm)lo=m;else hi=m}return lo}
+function exPoint(Ln,hm){const k=segIdx(Ln,hm),gap=Ln.pk[k+1]-Ln.pk[k]>2;
+  let t=gap?0:(hm-Ln.pk[k])/((Ln.pk[k+1]-Ln.pk[k])||1);t=Math.max(0,Math.min(1,t));
+  const la=Ln.la[k]+t*(Ln.la[k+1]-Ln.la[k]),lo=Ln.lo[k]+t*(Ln.lo[k+1]-Ln.lo[k]);
+  const dy=(Ln.la[k+1]-Ln.la[k]),dx=(Ln.lo[k+1]-Ln.lo[k])*Math.cos(la*rad);
+  return{la,lo,k,gap,brg:Math.atan2(dx,dy)/rad}}
+function loadLeaflet(){if(window.L&&window.L.map)return Promise.resolve(window.L);
+  if(ex.loading)return ex.loading;
+  ex.loading=new Promise((ok,ko)=>{const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';sc.onload=()=>ok(window.L);sc.onerror=()=>{ex.loading=null;ko()};document.head.appendChild(sc)});
+  return ex.loading}
+const IGN=(layer,fmt)=>'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER='+layer+'&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT='+fmt;
+function openEx(){
+  if(!ex.code){const c=st.match?st.match.code:null;if(c)chooseEx(c,st.match.hm,true)}
+  loadLeaflet().then(LF=>{ex.LF=LF;
+    if(!ex.map){
+      ex.map=LF.map('exMap',{zoomControl:true,attributionControl:true,maxZoom:20}).setView(st.pos||[43.52135,5.44715],17);
+      ex.layers={sat:LF.tileLayer(IGN('ORTHOIMAGERY.ORTHOPHOTOS','image/jpeg'),{maxZoom:20,maxNativeZoom:19,attribution:'Photos © IGN'}),
+                 plan:LF.tileLayer(IGN('GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2','image/png'),{maxZoom:20,maxNativeZoom:18,attribution:'Plan © IGN'})};
+      ex.layers[ex.base].addTo(ex.map);
+      ex.map.attributionControl.setPrefix(false);
+      ex.map.on('dragstart',()=>{ex.follow=false;$('exRecenter').hidden=false});
+      ex.map.on('click',e=>exTap(e.latlng.lat,e.latlng.lng));
+    }
+    setTimeout(()=>{ex.map.invalidateSize();exBuildLine();if(ex.hm!=null)setEx(ex.hm,true)},0);
+  }).catch(()=>{$('exMap').innerHTML='<p style="color:#fff;padding:16px;margin:0">Carte indisponible : vérifiez la connexion internet.</p>'})}
+function exBuildLine(){if(!ex.map||!ex.L)return;const LF=ex.LF;
+  if(ex.lines)ex.lines.remove();
+  const parts=[];let cur=[];const Ln=ex.L;
+  for(let i=0;i<Ln.n;i++){if(i&&Ln.pk[i]-Ln.pk[i-1]>2){if(cur.length>1)parts.push(cur);cur=[]}cur.push([Ln.la[i],Ln.lo[i]])}
+  if(cur.length>1)parts.push(cur);
+  ex.lines=LF.layerGroup([LF.polyline(parts,{color:'#000',weight:7,opacity:.45,interactive:false}),LF.polyline(parts,{color:'#ff7a24',weight:3.5,opacity:.95,interactive:false})]).addTo(ex.map);
+  if(!ex.marker){ex.marker=LF.marker([Ln.la[0],Ln.lo[0]],{icon:LF.divIcon({className:'',html:'<div class="exarrow"><div></div></div>',iconSize:[30,30],iconAnchor:[15,15]}),interactive:false,zIndexOffset:1000}).addTo(ex.map)}
+  ex.kmKey=null}
+function exKms(){if(!ex.map||!ex.L)return;const key=ex.code+':'+Math.floor(ex.hm/10);if(key===ex.kmKey)return;ex.kmKey=key;const LF=ex.LF;
+  if(ex.kms)ex.kms.remove();ex.kms=LF.layerGroup();
+  const shown=fixHm(ex.code,ex.hm).hm,km0=Math.floor(shown/10);
+  for(let km=km0-3;km<=km0+4;km++){const raw=rawFor(ex.code,km*10);if(raw<ex.L.pk[0]||raw>ex.L.pk[ex.L.n-1])continue;const p=exPoint(ex.L,raw);if(p.gap)continue;
+    LF.marker([p.la,p.lo],{icon:LF.divIcon({className:'',html:'<div class="kmlbl">'+km+'</div>',iconSize:null,iconAnchor:[14,22]}),interactive:false}).addTo(ex.kms)}
+  ex.kms.addTo(ex.map)}
+function chooseEx(c,hm,silent){const Ln=lineObj(c);if(!Ln)return;exStop();ex.code=c;ex.L=Ln;
+  $('exCode').textContent='Ligne '+c;$('exName').textContent=lineName(c)+' · PK '+fmtPk(Ln.pk[0])+' à '+fmtPk(Ln.pk[Ln.n-1]);
+  $('exChosen').hidden=false;$('exPick').hidden=true;$('exRes').hidden=true;$('exQ').value='';
+  const sl=$('exSlide');sl.min=Ln.pk[0];sl.max=Ln.pk[Ln.n-1];$('exMin').textContent=fmtPk(fixHm(c,Ln.pk[0]).hm);$('exMax').textContent=fmtPk(fixHm(c,Ln.pk[Ln.n-1]).hm);
+  ex.follow=true;$('exRecenter').hidden=true;exBuildLine();setEx(hm==null?Ln.pk[0]:hm,true)}
+function setEx(hm,jump){const Ln=ex.L;if(!Ln)return;hm=Math.max(Ln.pk[0],Math.min(Ln.pk[Ln.n-1],hm));ex.hm=hm;
+  const p=exPoint(Ln,hm),shown=fixHm(ex.code,hm).hm;ex.p=p;
+  $('exPk').innerHTML=fmtPk(shown).replace('+','<small>+</small>');$('exLigne').textContent='Ligne '+ex.code;
+  const e=entre(ex.code,shown/10);$('exEntre').textContent=(NAMES[ex.code]||'')+(e?' · '+e:'');
+  if(!ex.dragging)$('exSlide').value=hm;
+  $('exGmaps').href='https://www.google.com/maps/@?api=1&map_action=map&center='+p.la.toFixed(6)+','+p.lo.toFixed(6)+'&zoom=18&basemap=satellite';
+  if(ex.map&&ex.marker){ex.marker.setLatLng([p.la,p.lo]);const el=ex.marker.getElement();if(el)el.firstChild.style.transform='rotate('+(p.brg+(ex.dir<0?180:0))+'deg)';
+    if(ex.follow)ex.map.setView([p.la,p.lo],jump?Math.max(ex.map.getZoom(),16):ex.map.getZoom(),{animate:false});exKms()}}
+function exTick(ts){if(!ex.play)return;const dt=Math.min(.25,ex.t?(ts-ex.t)/1000:0);ex.t=ts;const Ln=ex.L;
+  let hm=ex.hm+ex.dir*ex.speed/3.6*dt/100;
+  if(hm>=Ln.pk[Ln.n-1]||hm<=Ln.pk[0]){setEx(hm);exStop();toast('Bout de la ligne');return}
+  const k=segIdx(Ln,hm);if(Ln.pk[k+1]-Ln.pk[k]>2)hm=ex.dir>0?Ln.pk[k+1]:Ln.pk[k];
+  setEx(hm);ex.raf=requestAnimationFrame(exTick)}
+function exStart(){if(!ex.L){toast('Choisissez une ligne');return}ex.play=true;ex.t=0;ex.follow=true;$('exRecenter').hidden=true;$('exPlay').textContent='❚❚';$('exPlay').setAttribute('aria-label','Pause');ex.raf=requestAnimationFrame(exTick)}
+function exStop(){ex.play=false;cancelAnimationFrame(ex.raf);const b=$('exPlay');if(b){b.textContent='▶';b.setAttribute('aria-label','Lecture')}}
+function exTap(la,lo){const m=locate(la,lo).filter(x=>x.d<300);if(!m.length){toast('Pas de voie ici');return}
+  const own=m.find(x=>x.code===ex.code);exStop();ex.follow=true;$('exRecenter').hidden=true;
+  if(own)setEx(own.hm);else{chooseEx(m[0].code,m[0].hm);toast('Ligne '+m[0].code)}}
+$('exPlay').onclick=()=>ex.play?exStop():exStart();
+document.querySelectorAll('.steps button[data-s]').forEach(b=>b.onclick=()=>{if(!ex.L)return;ex.follow=true;$('exRecenter').hidden=true;
+  const step=+b.dataset.s,sh=fixHm(ex.code,ex.hm).hm,target=(step>0?Math.floor(sh/Math.abs(step)+1e-6)+1:Math.ceil(sh/Math.abs(step)-1e-6)-1)*Math.abs(step);setEx(rawFor(ex.code,target),true)});
+$('exSlide').addEventListener('input',e=>{ex.dragging=true;ex.follow=true;$('exRecenter').hidden=true;setEx(+e.target.value)});
+$('exSlide').addEventListener('change',()=>{ex.dragging=false});
+function segBtns(id,fn){document.querySelectorAll('#'+id+' button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#'+id+' button').forEach(x=>x.setAttribute('aria-pressed',x===b));fn(+b.dataset.v)})}
+segBtns('exSpeed',v=>ex.speed=v);segBtns('exDir',v=>{ex.dir=v;if(ex.hm!=null)setEx(ex.hm)});
+document.querySelectorAll('.exbase button').forEach(b=>b.onclick=()=>{if(!ex.map)return;ex.layers[ex.base].remove();ex.base=b.dataset.b;ex.layers[ex.base].addTo(ex.map);
+  document.querySelectorAll('.exbase button').forEach(x=>x.setAttribute('aria-pressed',x===b))});
+$('exRecenter').onclick=()=>{ex.follow=true;$('exRecenter').hidden=true;setEx(ex.hm,true)};
+$('exFromMe').onclick=()=>{if(!st.match){toast('Pas encore de position : activez le GPS');return}chooseEx(st.match.code,st.match.hm)};
+$('exQ').addEventListener('input',()=>{const r=search($('exQ').value),box=$('exRes');box.innerHTML='';box.hidden=!r.length;
+  r.forEach(c=>{const b=document.createElement('button');const rg=lineRange(c);b.innerHTML='<b></b><span></span>';b.firstChild.textContent=c;b.lastChild.textContent=lineName(c)+(rg?' · PK '+fmtPk(rg[0])+' à '+fmtPk(rg[1]):'');b.onclick=()=>chooseEx(c);box.appendChild(b)})});
+$('exChX').onclick=()=>{exStop();$('exChosen').hidden=true;$('exPick').hidden=false;$('exQ').focus()};
+document.addEventListener('visibilitychange',()=>{if(document.hidden)exStop()});
 
 // ---------- example state so the page opens working ----------
 st.center=[43.52135,5.44715];setPos(43.52135,5.44715,0,'demo');gpsState('','Exemple');
