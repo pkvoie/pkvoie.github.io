@@ -1,0 +1,16 @@
+name: Nettoyage unique (anciennes branches)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/nettoyage.yml']
+permissions:
+  contents: write
+jobs:
+  nettoyage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: |
+          git push origin --delete sonde
+          git push origin --delete sonde-out
+          git ls-remote origin
